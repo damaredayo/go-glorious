@@ -3,12 +3,19 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"log"
 
 	"github.com/sstallion/go-hid"
 )
+
+type Device struct {
+	hid *hid.Device
+
+	mouse *GloriousMouse
+	conf  *GloriousConfig
+	dbt   int
+}
 
 const CFG_SIZE_USED = 131
 
@@ -178,17 +185,13 @@ func GetDevice(m *GloriousMouse) {
 	hid.Enumerate(m.vid, m.pid, m.enumFunc)
 }
 
-func dumpConfig() *GloriousConfig {
-	return nil
-}
-
 // Commands start here
 
-func GetConfig(dev *hid.Device) *GloriousConfig {
+func (dev *Device) GetConfig() *GloriousConfig {
 	conf := [6]byte{0x5, 0x11}
-	res, err := dev.SendFeatureReport(conf[:])
+	res, err := dev.hid.SendFeatureReport(conf[:])
 	if err != nil || res != len(conf) {
-		log.Fatalln("res:", res, "in get config cmd, go err:", err, "hid err:", dev.Error())
+		log.Fatalln("res:", res, "in get config cmd, go err:", err, "hid err:", dev.hid.Error())
 	}
 
 	cfg := GloriousConfig{
@@ -208,74 +211,81 @@ func GetConfig(dev *hid.Device) *GloriousConfig {
 	}
 	d := buf.Bytes()
 
-	res, err = dev.GetFeatureReport(d)
+	res, err = dev.hid.GetFeatureReport(d)
 	if err != nil || res < 1 {
-		log.Fatalln("res:", res, "in read config, go err:", err, "hid err:", dev.Error())
+		log.Fatalln("res:", res, "in read config, go err:", err, "hid err:", dev.hid.Error())
 	}
-	fmt.Printf("Config read with %v bytes\n", res)
 
-	return Read(d)
+	dev.conf = Read(d)
+
+	return dev.conf
 }
 
-func SetConfig(dev *hid.Device, conf *GloriousConfig) error {
-	conf.ConfigWrite = CFG_SIZE_USED - 8
-	confBytes, err := conf.Write()
+func (dev *Device) SetConfig() error {
+	if dev.conf == nil {
+		return fmt.Errorf("conf is nil")
+	}
+
+	dev.conf.ConfigWrite = CFG_SIZE_USED - 8
+	confBytes, err := dev.conf.Write()
 	if err != nil {
 		return err
 	}
 
-	res, err := dev.SendFeatureReport(confBytes)
+	res, err := dev.hid.SendFeatureReport(confBytes)
 	if res == -1 || err != nil {
-		return errors.New(fmt.Sprintf("error writing config: (%v) res: %v", err, res))
+		return fmt.Errorf("error writing config: (%v) res: %v", err, res)
 	}
 	return nil
 }
 
-func GetFirmwareVersion(dev *hid.Device) string {
+func (dev *Device) GetFirmwareVersion() string {
 
 	version := [6]byte{0x5, 0x1}
-	res, err := dev.SendFeatureReport(version[:])
+	res, err := dev.hid.SendFeatureReport(version[:])
 	if err != nil || res != len(version) {
-		log.Fatalln("res:", res, "in get firmware version cmd, go err:", err, "hid err:", dev.Error())
+		log.Fatalln("res:", res, "in get firmware version cmd, go err:", err, "hid err:", dev.hid.Error())
 	}
 
-	res, err = dev.GetFeatureReport(version[:])
+	res, err = dev.hid.GetFeatureReport(version[:])
 	if err != nil || res != len(version) {
-		log.Fatalln("res:", res, "in read firmware version, go err:", err, "hid err:", dev.Error())
+		log.Fatalln("res:", res, "in read firmware version, go err:", err, "hid err:", dev.hid.Error())
 	}
 
 	return fmt.Sprintf("%s", version)
 }
 
-func GetDebounceTime(dev *hid.Device) int {
+func (dev *Device) GetDebounceTime() int {
 
 	debounce := [6]byte{0x5, 0x1a}
-	res, err := dev.SendFeatureReport(debounce[:])
+	res, err := dev.hid.SendFeatureReport(debounce[:])
 	if err != nil || res != len(debounce) {
-		log.Fatalln("res:", res, "in get debounce time cmd, go err:", err, "hid err:", dev.Error())
+		log.Fatalln("res:", res, "in get debounce time cmd, go err:", err, "hid err:", dev.hid.Error())
 	}
 
-	res, err = dev.GetFeatureReport(debounce[:])
+	res, err = dev.hid.GetFeatureReport(debounce[:])
 	if err != nil || res != len(debounce) {
-		log.Fatalln("res:", res, "in read debounce time, go err:", err, "hid err:", dev.Error())
+		log.Fatalln("res:", res, "in read debounce time, go err:", err, "hid err:", dev.hid.Error())
 	}
 
-	return int(debounce[2] * 2)
+	dev.dbt = int(debounce[2] * 2)
+
+	return dev.dbt
 }
 
-func SetDebounceTime(dev *hid.Device, dbt int) error {
+func (dev *Device) SetDebounceTime(dbt int) error {
 
 	debounce := [6]byte{0x5, 0x1a, byte(dbt / 2)}
-	res, err := dev.SendFeatureReport(debounce[:])
+	res, err := dev.hid.SendFeatureReport(debounce[:])
 	if err != nil || res != len(debounce) {
-		log.Fatalln("res:", res, "in set debounce time, go err:", err, "hid err:", dev.Error())
+		log.Fatalln("res:", res, "in set debounce time, go err:", err, "hid err:", dev.hid.Error())
 	}
 	return err
 }
 
 func (c *GloriousConfig) SetActiveDPI(opt int) error {
 	if opt < 1 || opt > 6 {
-		return errors.New("opt too high or low")
+		return fmt.Errorf("opt too high or low")
 	}
 	c.ActiveDpi = uint8(opt)
 
@@ -285,10 +295,10 @@ func (c *GloriousConfig) SetActiveDPI(opt int) error {
 func (c *GloriousConfig) SetDPI(opt int, dpi int) error {
 	opt--
 	if dpi < 200 {
-		return errors.New("dpi is too low")
+		return fmt.Errorf("dpi is too low")
 	}
 	if opt < 0 || opt > 5 {
-		return errors.New("opt too high or low")
+		return fmt.Errorf("opt too high or low")
 	}
 
 	c.Dpi[opt] = uint8(dpi/100 - 1)
@@ -299,7 +309,7 @@ func (c *GloriousConfig) SetDPI(opt int, dpi int) error {
 func (c *GloriousConfig) GetRGBMode() (int, int, error) {
 	mode, ok := c.Mode(c.RgbEffect)
 	if !ok {
-		return 0, 0, errors.New("no fitting rgb mode")
+		return 0, 0, fmt.Errorf("no fitting rgb mode")
 	}
 	brightness := int(mode >> 4)
 	speed := int(mode & 0x0f)
@@ -337,12 +347,12 @@ func (c *GloriousConfig) SetRGBEffect(effect RGBEffect) {
 
 func (c *GloriousConfig) SetRGBBrightness(brightness int) error {
 	if brightness < 0 || brightness > 4 {
-		return errors.New("brightness level too high or low")
+		return fmt.Errorf("brightness level too high or low")
 	}
 
 	switch c.RgbEffect {
 	case RGB_GLORIOUS:
-		return errors.New("brightness can not be set on RGB_GLORIOUS")
+		return fmt.Errorf("brightness can not be set on RGB_GLORIOUS")
 	}
 
 	oldBrightness, speed, err := c.GetRGBMode()
@@ -360,7 +370,7 @@ func (c *GloriousConfig) SetRGBBrightness(brightness int) error {
 
 func (c *GloriousConfig) SetRGBSpeed(speed int) error {
 	if speed < 0 || speed > 3 {
-		return errors.New("brightness level too high or low")
+		return fmt.Errorf("brightness level too high or low")
 	}
 
 	brightness, oldSpeed, err := c.GetRGBMode()

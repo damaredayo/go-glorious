@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"log"
 )
 
@@ -94,7 +93,6 @@ func Read(d []byte) *GloriousConfig {
 	//reader = bytes.NewReader(raveColoursRaw)
 	//binary.Read(reader, binary.BigEndian, &raveColours)
 
-	fmt.Println(len(d))
 	cfg := &GloriousConfig{
 		ReportID:              d[0],
 		CommandID:             d[1],
@@ -126,7 +124,6 @@ func Read(d []byte) *GloriousConfig {
 		LiftOffDistance:       d[131],
 	}
 
-	//fmt.Printf("%+v\n", cfg)
 	return cfg
 }
 
@@ -142,8 +139,6 @@ func (c *GloriousConfig) Write() ([]byte, error) {
 		c.TailMode, c.Unk4, c.RaveMode, c.RaveColours, c.WaveMode, c.Breathing1Mode,
 		c.Breathing1Colour, c.Unk5, c.LiftOffDistance}
 
-	fmt.Println(wc.WaveMode, c.WaveMode)
-	fmt.Println(binary.Size(wc))
 	var buf bytes.Buffer
 	emptyBytes := 520 - binary.Size(wc)
 	err := binary.Write(&buf, binary.BigEndian, wc)
