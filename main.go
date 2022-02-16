@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/sstallion/go-hid"
 	"github.com/urfave/cli/v2"
@@ -46,13 +47,12 @@ func main() {
 				Name:    "set",
 				Aliases: []string{"s"},
 				Usage:   "set config option",
-				Action: func(c *cli.Context) error {
-					return fmt.Errorf("Please specify what to set")
-				},
 				Subcommands: []*cli.Command{
 					{
-						Name:  "dpi",
-						Usage: "Set dpi",
+						Name:   "dpi",
+						Usage:  "Set dpi",
+						Before: runBefore,
+						After:  device.runAfter,
 						Action: func(c *cli.Context) error {
 							dpiInt, err := strconv.Atoi(c.Args().First())
 							if err != nil {
@@ -72,6 +72,8 @@ func main() {
 						Name:    "debounce",
 						Usage:   "Set debounce time",
 						Aliases: []string{"db", "dbt"},
+						Before:  runBefore,
+						After:   device.runAfter,
 						Action: func(c *cli.Context) error {
 							dbtInt, err := strconv.Atoi(c.Args().First())
 							if err != nil {
@@ -84,20 +86,64 @@ func main() {
 							return nil
 						},
 					},
+					{
+						Name:    "lighting",
+						Usage:   "Lighting configuration",
+						Aliases: []string{"l"},
+						Subcommands: []*cli.Command{
+							{
+								Name:    "effect",
+								Aliases: []string{"e"},
+								Before:  runBefore,
+								After:   device.runAfter,
+								Action: func(c *cli.Context) error {
+									lightingName := strings.Join(c.Args().Slice(), " ")
+									lightingMode, ok := NameToRGBEffect(lightingName)
+									if !ok {
+										return fmt.Errorf("invalid lighting mode")
+									}
+									device.conf.SetRGBEffect(lightingMode)
+									return nil
+								},
+							},
+							{
+								Name:    "brightness",
+								Aliases: []string{"b"},
+								Before:  runBefore,
+								After:   device.runAfter,
+								Action: func(c *cli.Context) error {
+									brightness, err := strconv.Atoi(c.Args().First())
+									if err != nil {
+										return err
+									}
+									return device.conf.SetRGBBrightness(brightness)
+								},
+							},
+							{
+								Name:    "speed",
+								Aliases: []string{"s"},
+								Before:  runBefore,
+								After:   device.runAfter,
+								Action: func(c *cli.Context) error {
+									speed, err := strconv.Atoi(c.Args().First())
+									if err != nil {
+										return err
+									}
+									return device.conf.SetRGBSpeed(speed)
+								},
+							},
+						},
+					},
 				},
 			},
 		},
-		Version: "v1.0.0",
+		Version: "v1.1.0",
 	}
 
 	app.EnableBashCompletion = true
-	app.Run(os.Args)
-
-	err = device.SetConfig()
+	err = app.Run(os.Args)
 	if err != nil {
-		fmt.Printf("An error occured while writing the config: %v\n", err)
+		fmt.Println(err)
 		os.Exit(1)
 	}
-
-	fmt.Println("Successfully updated configuration")
 }

@@ -148,6 +148,8 @@ func NameToRGBEffect(n string) (RGBEffect, bool) {
 	switch n {
 	case "Off":
 		return RGB_OFF, true
+	case "Glorious Mode":
+		return RGB_GLORIOUS, true
 	case "Single Color":
 		return RGB_SINGLE, true
 	case "RGB Breathing":
@@ -252,7 +254,7 @@ func (dev *Device) GetFirmwareVersion() string {
 		log.Fatalln("res:", res, "in read firmware version, go err:", err, "hid err:", dev.hid.Error())
 	}
 
-	return fmt.Sprintf("%s", version)
+	return fmt.Sprintf("%c", version)
 }
 
 func (dev *Device) GetDebounceTime() int {
@@ -355,14 +357,10 @@ func (c *GloriousConfig) SetRGBBrightness(brightness int) error {
 		return fmt.Errorf("brightness can not be set on RGB_GLORIOUS")
 	}
 
-	oldBrightness, speed, err := c.GetRGBMode()
+	_, speed, err := c.GetRGBMode()
 	if err != nil {
 		return err
 	}
-
-	fmt.Println("Old Brightness:", oldBrightness)
-
-	fmt.Println("New Brightness:", brightness)
 
 	return c.SetRGBMode(brightness, speed)
 
@@ -370,18 +368,13 @@ func (c *GloriousConfig) SetRGBBrightness(brightness int) error {
 
 func (c *GloriousConfig) SetRGBSpeed(speed int) error {
 	if speed < 0 || speed > 3 {
-		return fmt.Errorf("brightness level too high or low")
+		return fmt.Errorf("speed level too high or low")
 	}
 
-	brightness, oldSpeed, err := c.GetRGBMode()
+	brightness, _, err := c.GetRGBMode()
 	if err != nil {
 		return err
 	}
-
-	fmt.Println("Old Speed:", oldSpeed)
-
-	fmt.Println("New Speed:", speed)
-
 	return c.SetRGBMode(brightness, speed)
 
 }
