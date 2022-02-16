@@ -1,5 +1,8 @@
 # go-glorious
 
-### A Glorious Model O/+ wrapper for Linux
+### A Glorious Mouse wrapper for Linux written in Go
 
-This is a work in progress, so far just a framework, CLI coming soon.
+### Supported devices
+- Dream Machines DM5
+- Glorious Model D
+- Glorious Model O/O-
